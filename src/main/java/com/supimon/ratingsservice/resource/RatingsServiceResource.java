@@ -1,43 +1,39 @@
 package com.supimon.ratingsservice.resource;
 
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.FirebaseOptions;
+import com.google.api.core.ApiFuture;
+import com.google.cloud.firestore.*;
+import com.google.firebase.cloud.FirestoreClient;
 import com.supimon.ratingsservice.models.RatingModel;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/ratings")
 public class RatingsServiceResource {
 
     @RequestMapping("/{chefId}")
-    public double getRating(@PathVariable("chefId") String chefId) throws IOException {
+    public Double getRating(@PathVariable("chefId") String chefId) throws InterruptedException, ExecutionException {
 
-        FileInputStream serviceAccount =
-                new FileInputStream("src/main/resources/chefapp-eeae0-firebase-adminsdk-tujtr-198a71e00a.json");
+        Firestore db = FirestoreClient.getFirestore();
+        CollectionReference chefRating = db.collection("ratings");
+        // Create a query against the collection.
+        Query query = chefRating.whereEqualTo("chefId", chefId);
 
-        FirebaseOptions options = new FirebaseOptions.Builder()
-                .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                .setDatabaseUrl("https://chefapp-eeae0.firebaseio.com")
-                .build();
+        ApiFuture<QuerySnapshot> querySnapshot = query.get();
 
-        FirebaseApp.initializeApp(options);
+        List<QueryDocumentSnapshot> documents = querySnapshot.get().getDocuments();
 
-        return getAllRating(chefId)
-                .stream()
-                .mapToDouble(obj -> obj.getRating()).average().orElse(0.0);
-    }
+        RatingModel ratingModel = new RatingModel();
 
-    private List<RatingModel> getAllRating(String chefId){
-        return Collections.singletonList(
-                new RatingModel(4.5, "EMP23")
-        );
+        for (QueryDocumentSnapshot document : documents) {
+            ratingModel.setUserId(document.getString("chefId"));
+            ratingModel.setRating(document.getDouble("rating"));
+        }
+
+        return ratingModel.getRating();
     }
 }
